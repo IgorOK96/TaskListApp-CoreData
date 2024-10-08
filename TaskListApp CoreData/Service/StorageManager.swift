@@ -23,7 +23,7 @@ final class StorageManager {
     }
 
     // MARK: - Context Core Data
-    var context: NSManagedObjectContext {
+   private var context: NSManagedObjectContext {
         persistentContainer.viewContext
     }
 
@@ -47,16 +47,23 @@ final class StorageManager {
         return task
     }
 
-    func fetchTasks() -> [ToDoTask] {
+    func fetchTasks(completion: @escaping (Result<[ToDoTask], Error>) -> Void) {
         let fetchRequest: NSFetchRequest<ToDoTask> = ToDoTask.fetchRequest()
-        do {
-            return try context.fetch(fetchRequest)
-        } catch {
-            print("Error fetch: \(error)")
-            return []
+        DispatchQueue.global().async { [weak self] in
+            guard let self = self else { return }
+            do {
+                let tasks = try self.context.fetch(fetchRequest)
+                DispatchQueue.main.async {
+                    completion(.success(tasks))
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(.failure(error))
+                }
+            }
         }
     }
-
+    
     func updateTask(_ task: ToDoTask, withTitle title: String) {
         task.title = title
         saveContext()

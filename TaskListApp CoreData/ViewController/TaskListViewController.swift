@@ -6,8 +6,7 @@
 //
 
 import UIKit
-
-class TaskListViewController: UITableViewController {
+final class TaskListViewController: UITableViewController {
     private var taskList: [ToDoTask] = []
     private let cellID = "task"
     
@@ -15,12 +14,26 @@ class TaskListViewController: UITableViewController {
         super.viewDidLoad()
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellID)
         view.backgroundColor = .systemBackground
-        taskList = StorageManager.shared.fetchTasks()
+        fetchTasks()
         setupNavigationBar()
     }
     
     @objc private func addNewTask() {
-        showAlert(withTitle: "New Task", andMessage: "What do you want to do?")
+        showAlert()
+    }
+    
+    private func fetchTasks() {
+        StorageManager.shared.fetchTasks { [weak self] result in
+            switch result {
+            case .success(let tasks):
+                self?.taskList = tasks
+                DispatchQueue.main.async {
+                    self?.tableView.reloadData()
+                }
+            case .failure(let error):
+                print("Errr fetching tasks: \(error.localizedDescription)")
+            }
+        }
     }
     
     private func save(_ taskName: String) {
@@ -30,32 +43,26 @@ class TaskListViewController: UITableViewController {
         let indexPath = IndexPath(row: taskList.count - 1, section: 0)
         tableView.insertRows(at: [indexPath], with: .automatic)
     }
-    
-    private func showAlert(
-        withTitle title: String,
-        andMessage message: String,
-        task: ToDoTask? = nil,
-        indexPath: IndexPath? = nil
-    ) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        let saveActionTitle = task == nil ? "Save Task" : "Update Task"
-        let saveAction = UIAlertAction(title: saveActionTitle, style: .default) { _ in
-            guard let taskName = alert.textFields?.first?.text, !taskName.isEmpty else { return }
-            
-            if let task = task, let indexPath = indexPath {
+}
+
+// MARK: - Alert Controller
+extension TaskListViewController {
+    private func showAlert(task: ToDoTask? = nil, completion: (() -> Void)? = nil) {
+        let userAction: UserAction = task != nil ? .editTask : .newTask
+        let alertFactory = AlertControllerFactory(
+            userAction: userAction,
+            taskTitle: task?.title
+        )
+        
+        let alert = alertFactory.createAlert { [unowned self] taskName in
+            if let task {
                 StorageManager.shared.updateTask(task, withTitle: taskName)
-                self.tableView.reloadRows(at: [indexPath], with: .automatic)
+                completion?()
             } else {
                 self.save(taskName)
             }
         }
-        let cancelAction = UIAlertAction(title: "Cancel", style: .destructive)
-        alert.addAction(saveAction)
-        alert.addAction(cancelAction)
-        alert.addTextField { textField in
-            textField.placeholder = "Name task"
-            textField.text = task?.title
-        }
+        
         present(alert, animated: true)
     }
 }
@@ -79,7 +86,7 @@ extension TaskListViewController {
 // MARK: - UITableViewDelegate
 extension TaskListViewController {
     override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle,
-        forRowAt indexPath:  IndexPath) {
+    forRowAt indexPath:  IndexPath) {
         if editingStyle == .delete {
             let task = taskList.remove(at: indexPath.row)
             StorageManager.shared.deleteTask(task)
@@ -88,9 +95,11 @@ extension TaskListViewController {
     }
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        let task = taskList[indexPath.row]
-        showAlert(withTitle: "Update Task", andMessage: "Edit your task", task: task, indexPath: indexPath)
         tableView.deselectRow(at: indexPath, animated: true)
+        let task = taskList[indexPath.row]
+        showAlert(task: task) {
+            tableView.reloadRows(at: [indexPath], with: .automatic)
+        }
     }
 }
 
