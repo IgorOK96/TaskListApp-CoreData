@@ -40,11 +40,11 @@ final class AlertControllerFactory {
             guard let taskName = alert.textFields?.first?.text, !taskName.isEmpty else { return }
             completion(taskName)
         }
-        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        let cancelAction = UIAlertAction(title: "Cancel", style: .destructive)
         
         alert.addAction(saveAction)
         alert.addAction(cancelAction)
-        alert.addTextField { textField in
+        alert.addTextField { [unowned self] textField in
             textField.placeholder = "Task name"
             textField.text = self.taskTitle
         }
